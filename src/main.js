@@ -1,4 +1,4 @@
-import { loadConfig, activeProvider, audioUnlocked, fmtTokens } from './config.js';
+import { loadConfig, audioUnlocked, fmtTokens } from './config.js';
 import { loadAgents, loadAgentSession, saveAgentSession } from './agents.js';
 import { bootSequence, startGateway, landingScreen } from './boot.js';
 import { Screen } from './screen.js';
@@ -6,20 +6,20 @@ import { readInput } from './input.js';
 import { rawStart, rawStop } from './ui.js';
 import { handleInput, bindScreen } from './agent.js';
 import { COMMANDS } from './commands.js';
-import { C, paint, BOLD, soft, dim, neon, grey } from './theme.js';
+import { C, paint, BOLD, soft, dim, neon, grey, applyTheme } from './theme.js';
+import { providerLabel } from './providers.js';
 
 function buildState() {
   const cfg = loadConfig();
+  applyTheme(cfg.theme);
   const agents = loadAgents();
   const agent = agents.find((a) => a.name === (cfg.activeAgent || 'peridot')) || agents[0];
   const session = loadAgentSession(agent.name, agent.lastSession || 'main');
   return { cfg, agents, agent, session, mode: 'build', gatewayStatus: 'unreachable', lastOutput: '', busy: false };
 }
 
-const modelName = (cfg) => cfg.model.display
-  .replace(/^anthropic\//, '')
-  .replace(/claude-sonnet-4-6/, 'Claude Sonnet 4.6')
-  .replace(/-/g, ' ');
+const modelName = (cfg) => neon(cfg.model.display || cfg.model.id) +
+  (cfg.model.provider ? grey('  · ' + providerLabel(cfg.model.provider)) : '');
 
 export async function runMain() {
   const state = buildState();
@@ -34,8 +34,8 @@ export async function runMain() {
       soft('session ') + neon(state.session.name) + dim(' · ') + modeChip(),
     statusRight: `/ commands · pgup/pgdn scroll · ${state.mode} mode`,
     idle: state.busy ? 'working' : 'idle',
-    footerLeft: soft('Model: ') + neon(modelName(state.cfg)),
-    footerRight: grey(`${fmtTokens(state.session.tokensUsed)}/1M tokens`),
+    footerLeft: soft('Model: ') + modelName(state.cfg),
+    footerRight: grey(`${fmtTokens(state.session.tokensUsed)}/${fmtTokens(state.cfg.model.contextTokens)} tokens`),
   }));
 
   state.screen = screen;

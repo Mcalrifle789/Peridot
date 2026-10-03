@@ -4,6 +4,7 @@ import {
 } from './theme.js';
 import { logo } from './logo.js';
 import { GATEWAY_HOST, GATEWAY_PORT, activeProvider, audioUnlocked } from './config.js';
+import { configuredProviders } from './providers.js';
 import { sleep } from './ui.js';
 
 // The local gateway — a real HTTP endpoint on 127.0.0.1:18789.
@@ -16,7 +17,8 @@ export function startGateway(state) {
         status: 'ok',
         agent: state.agent?.name || 'peridot',
         session: state.session?.name || 'main',
-        model: state.cfg.model.display,
+        model: state.cfg.model.id,
+        provider: state.cfg.model.provider,
         mode: state.mode,
         tokens: state.session?.tokensUsed || 0,
       }));
@@ -74,7 +76,10 @@ export function landingScreen(state) {
   out.push(li('Gateway', `http://${GATEWAY_HOST}:${GATEWAY_PORT} ` + grey('(' + gatewayStatus + ')')));
   out.push(li('Tools', 'filesystem, web, code, memory' + (audio ? ', audio' : '')));
   out.push(li('Agent', agentName + ' \x1b[0m' + grey(`(session ${sessName} · ${state.mode} mode)`)));
-  out.push(li('Provider', provider ? provider.name : 'none — offline (run `peridot setup`)'));
+  const others = configuredProviders(cfg).filter((p) => p.key !== provider?.key).map((p) => p.label);
+  out.push(li('Provider', provider
+    ? provider.label + (others.length ? ' \x1b[0m' + grey(`(+ ${others.join(', ')} · /model to switch)`) : '')
+    : 'none — offline (add one with /provider)'));
   out.push('');
   out.push(white('All systems nominal. Awaiting ') + neon('your command') + white('.'));
   return out.join('\n');

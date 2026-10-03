@@ -4,7 +4,6 @@ import { stdout } from 'node:process';
 import { C, fg, paint, BOLD, DIM, stripAnsi } from './theme.js';
 
 const bg = ([r, g, b]) => `\x1b[48;2;${r};${g};${b}m`;
-const BAR_BG = [10, 26, 8];   // near-black green for header/footer bars
 const RESET = '\x1b[0m';
 
 // ANSI-aware hard wrap that carries active SGR styles onto continuation lines.
@@ -146,7 +145,7 @@ export class Screen {
     // Bars: re-apply the bar background after every embedded reset so styled
     // spans inside header/footer text don't punch holes in the bar.
     const barify = (text, width) => {
-      const solid = bg(BAR_BG) + text.replaceAll(RESET, RESET + bg(BAR_BG));
+      const solid = bg(C.bar) + text.replaceAll(RESET, RESET + bg(C.bar));
       return solid + ' '.repeat(Math.max(width - stripAnsi(text).length, 0)) + RESET;
     };
 
@@ -175,12 +174,16 @@ export class Screen {
       const scroll = Math.max(0, Math.min(m.sel - maxShow + 1, m.items.length - maxShow));
       const panel = [];
       panel.push(paint('┌─ ', C.dimg) + paint(m.title, C.moss) + paint('  ·  ↑↓ · enter · esc', C.dimg, DIM));
-      m.items.slice(scroll, scroll + maxShow).forEach((it, idx) => {
+      const shown = m.items.slice(scroll, scroll + maxShow);
+      const colW = Math.min(Math.max(16, ...shown.map((it) => stripAnsi(it.left).length + 2)), 44);
+      shown.forEach((it, idx) => {
         const i = scroll + idx;
         const mark = i === m.sel ? paint('▸ ', C.neon) : '  ';
         const left = i === m.sel ? paint(it.left, C.neon, BOLD) : (it.dim ? paint(it.left, C.dimg) : paint(it.left, C.green));
-        const gap = ' '.repeat(Math.max(16 - stripAnsi(it.left).length, 1));
-        panel.push(paint('│ ', C.dimg) + mark + left + gap + paint(it.right || '', it.dim ? C.dimg : C.gray));
+        const gap = ' '.repeat(Math.max(colW - stripAnsi(it.left).length, 1));
+        const line = paint('│ ', C.dimg) + mark + left + gap + paint(it.right || '', it.dim ? C.dimg : C.gray) +
+          (it.swatch ? '  ' + it.swatch : '');
+        panel.push(wrapAnsi(line, W - 2)[0]); // clip: a wrapped row would break the layout
       });
       panel.push(paint(m.items.length > maxShow
         ? `└─ ${scroll + 1}–${Math.min(scroll + maxShow, m.items.length)} of ${m.items.length} ▾`
@@ -195,7 +198,7 @@ export class Screen {
     const view2 = this.input.buf.slice(start, start + maxVis);
     const body = this.input.buf.length === 0
       ? paint(this.input.placeholder, C.dimg, DIM)
-      : paint(view2, C.white);
+      : paint(this.input.mask ? '•'.repeat(view2.length) : view2, C.white);
     row(H - 3, ' ' + paint(this.input.prompt, C.neon, BOLD) + ' ' + body);
     row(H - 2, ' ' + paint('─'.repeat(Math.max(W - 2, 10)), C.deep));
     const statusLeft = this.status

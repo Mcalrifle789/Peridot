@@ -1,10 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import crypto from 'node:crypto';
 import yaml from 'js-yaml';
+import { configuredProviders } from './providers.js';
 
-export const PERIDOT_DIR = path.join(os.homedir(), '.peridot');
+export { activeProvider } from './providers.js';
+
+export const VERSION = '0.3.0';
+
+export const PERIDOT_DIR = process.env.PERIDOT_HOME || path.join(os.homedir(), '.peridot');
 export const CONFIG_PATH = path.join(PERIDOT_DIR, 'peridot.yaml');
 export const MEMORY_PATH = path.join(PERIDOT_DIR, 'memory.json');
 export const SESSION_DIR = path.join(PERIDOT_DIR, 'sessions');
@@ -15,12 +19,14 @@ export const GATEWAY_PORT = 18789;
 export const DEFAULTS = {
   user: { username: '', passwordHash: '' },
   model: {
+    provider: '',         // key into PROVIDERS (src/providers.js)
     display: 'anthropic/claude-sonnet-4-6',
     id: 'anthropic/claude-sonnet-4.5',
     planning: 'fuzzy local planning',
     contextTokens: 1000000,
   },
-  providers: {},          // { openrouter: { apiKey }, opencode: {...}, kilo: {...}, custom: { apiKey, baseUrl, model } }
+  providers: {},          // { <provider key>: { apiKey, baseUrl? } } — as many as the user adds
+  theme: 'peridot',
   search: { provider: 'duckduckgo', apiKey: '' },
   audio: { elevenlabs: '', deepgram: '' },
   session: 'main',
@@ -37,6 +43,7 @@ export function loadConfig() {
   try {
     const raw = yaml.load(fs.readFileSync(CONFIG_PATH, 'utf8')) || {};
     const cfg = deepMerge(structuredClone(DEFAULTS), raw);
+    migrate(cfg, raw);
     cfg._exists = true;
     return cfg;
   } catch {
@@ -52,8 +59,26 @@ export function saveConfig(cfg) {
   fs.writeFileSync(CONFIG_PATH, yaml.dump(clean, { lineWidth: 120 }), 'utf8');
 }
 
-export function hashPassword(pw) {
-  return crypto.createHash('sha256').update(pw).digest('hex');
+// v0.2 configs had no model.provider: the first keyed provider in this order
+// served every request, and a custom provider used its own `model` id.
+function migrate(cfg, raw) {
+  if (raw.model?.provider) return;
+  const legacy = ['openrouter', 'custom', 'opencode', 'kilo'].find((k) => cfg.providers?.[k]?.apiKey);
+  const first = legacy || configuredProviders(cfg)[0]?.key;
+  if (!first) return;
+  cfg.model.provider = first;
+  if (first === 'custom' && cfg.providers.custom.model) {
+    cfg.model.id = cfg.providers.custom.model;
+    cfg.model.display = cfg.providers.custom.model;
+  }
+}
+
+// Make `model` (from the catalog) the active model.
+export function setModel(cfg, provider, model) {
+  cfg.model.provider = provider;
+  cfg.model.id = model.id;
+  cfg.model.display = model.name || model.id;
+  cfg.model.contextTokens = model.context || DEFAULTS.model.contextTokens;
 }
 
 function deepMerge(base, over) {
@@ -86,15 +111,6 @@ export function loadSession(name = 'main') {
 export function saveSession(s) {
   ensureDirs();
   fs.writeFileSync(path.join(SESSION_DIR, `${s.name}.json`), JSON.stringify(s, null, 2), 'utf8');
-}
-
-export function activeProvider(cfg) {
-  const order = ['openrouter', 'custom', 'opencode', 'kilo'];
-  for (const name of order) {
-    const p = cfg.providers?.[name];
-    if (p?.apiKey) return { name, ...p };
-  }
-  return null;
 }
 
 export function audioUnlocked(cfg) {

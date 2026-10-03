@@ -74,7 +74,7 @@ export function readInput(screen, { commands, audioOn, placeholder = 'Ask Perido
         case 'enter': {
           if (list) {
             const c = list[sel];
-            if (c.args && inp.buf !== '/' + c.name) {
+            if (c.args && !c.optional && inp.buf !== '/' + c.name) {
               inp.buf = '/' + c.name + ' ';
               inp.pos = inp.buf.length;
               break;
@@ -99,18 +99,37 @@ export function readInput(screen, { commands, audioOn, placeholder = 'Ask Perido
 }
 
 // Arrow-key list picker rendered as the overlay menu. Resolves the picked item or null on esc.
-export function overlaySelect(screen, { title, items }) {
+// items: [{ label, desc?, dim?, swatch? }]
+// filter:  typing narrows the list (every typed word must appear in label or desc)
+// initial: index of the item selected first
+// onMove:  called with the highlighted item whenever it changes (live previews)
+export function overlaySelect(screen, { title, items, filter = false, initial = 0, query = '', onMove }) {
   return new Promise((resolve) => {
-    let sel = 0;
+    let sel = Math.min(Math.max(initial, 0), Math.max(items.length - 1, 0));
+    let q = filter ? query : '';
+    let lastMoved;
     const prevInput = screen.input;
-    screen.input = { buf: '', pos: 0, placeholder: '↑↓ to choose · enter to select · esc to cancel', prompt: '»' };
+    const hint = filter ? 'type to filter · ↑↓ · enter to select · esc to cancel' : '↑↓ to choose · enter to select · esc to cancel';
+    screen.input = { buf: q, pos: q.length, placeholder: hint, prompt: '»' };
+
+    const matches = (it) => {
+      const hay = `${it.label} ${it.desc || ''}`.toLowerCase();
+      return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+    };
+    let list = items.filter(matches);
 
     const sync = () => {
+      if (sel >= list.length) sel = Math.max(list.length - 1, 0);
+      screen.input.buf = q;
+      screen.input.pos = q.length;
       screen.menu = {
-        title,
-        items: items.map((it) => ({ left: it.label, right: it.desc || '', dim: it.dim })),
+        title: filter ? `${title}  ${list.length}/${items.length}` : title,
+        items: list.length
+          ? list.map((it) => ({ left: it.label, right: it.desc || '', dim: it.dim, swatch: it.swatch }))
+          : [{ left: '(no matches)', right: 'backspace to widen the search', dim: true }],
         sel,
       };
+      if (onMove && list[sel] !== lastMoved) { lastMoved = list[sel]; if (lastMoved) onMove(lastMoved); }
       screen.render();
     };
 
@@ -122,11 +141,17 @@ export function overlaySelect(screen, { title, items }) {
       resolve(value);
     };
 
+    const refilter = () => { list = items.filter(matches); sel = 0; };
+
     const off = onKeys((key) => {
       switch (key.name) {
-        case 'up': sel = (sel - 1 + items.length) % items.length; break;
-        case 'down': sel = (sel + 1) % items.length; break;
-        case 'enter': done(items[sel]); return;
+        case 'up': if (list.length) sel = (sel - 1 + list.length) % list.length; break;
+        case 'down': if (list.length) sel = (sel + 1) % list.length; break;
+        case 'pageup': sel = Math.max(sel - 10, 0); break;
+        case 'pagedown': sel = Math.min(sel + 10, Math.max(list.length - 1, 0)); break;
+        case 'char': if (filter) { q += key.ch; refilter(); } break;
+        case 'backspace': if (filter && q) { q = q.slice(0, -1); refilter(); } break;
+        case 'enter': if (list.length) { done(list[sel]); return; } break;
         case 'escape': case 'ctrl-c': done(null); return;
       }
       sync();
@@ -136,12 +161,12 @@ export function overlaySelect(screen, { title, items }) {
   });
 }
 
-// Single-line prompt inside the app (agent names, confirmations, ...).
-// Resolves the entered string, or null on esc/ctrl-c.
-export function promptLine(screen, { label, allowEmpty = false }) {
+// Single-line prompt inside the app (agent names, API keys, confirmations, ...).
+// Resolves the entered string, or null on esc/ctrl-c. `mask` hides the input.
+export function promptLine(screen, { label, allowEmpty = false, mask = false }) {
   return new Promise((resolve) => {
     const prevInput = screen.input;
-    screen.input = { buf: '', pos: 0, placeholder: label, prompt: ' ▸' };
+    screen.input = { buf: '', pos: 0, placeholder: label, prompt: ' ▸', mask };
     screen.render();
 
     const done = (value) => {
