@@ -1,0 +1,23 @@
+{
+  "name": "peridot",
+  "version": "0.2.0",
+  "description": "Peridot — local AI agent runtime in a terminal GUI. Matrix-green on pitch black.",
+  "type": "module",
+  "bin": {
+    "peridot": "bin/peridot.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "terminal",
+    "tui",
+    "cli"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,10 @@
+node_modules/
+target/
+native/**/build/
+*.obj
+*.exe
+*.lib
+*.exp
+*.pdb
+__pycache__/
+*.pyc
