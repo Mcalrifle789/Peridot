@@ -1,0 +1,12 @@
+[package]
+name = "peridot-themes"
+version = "0.3.0"
+edition = "2021"
+description = "Generates Peridot's GUI theme palettes (src/themes.js) and validates their contrast."
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[profile.release]
+opt-level = 3

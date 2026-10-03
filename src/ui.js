@@ -202,7 +202,8 @@ export function lineEditor({ footerLeft, footerRight, commands, audioOn, placeho
 }
 
 // ─── wizard controls ─────────────────────────────────────────────────────────
-export function textInput({ label, mask = false, allowEmpty = false, hint = '' }) {
+// `trim: false` keeps the input exactly as typed (passwords).
+export function textInput({ label, mask = false, allowEmpty = false, hint = '', trim = true }) {
   return new Promise((resolve) => {
     const area = new Area();
     let buf = '';
@@ -226,12 +227,14 @@ export function textInput({ label, mask = false, allowEmpty = false, hint = '' }
         case 'right': if (pos < buf.length) pos++; break;
         case 'home': pos = 0; break;
         case 'end': pos = buf.length; break;
-        case 'enter':
-          if (!buf.trim() && !allowEmpty) break;
+        case 'enter': {
+          const value = trim ? buf.trim() : buf;
+          if (!value && !allowEmpty) break;
           off(); area.clear();
-          stdout.write(' ' + soft(label) + ' ' + neon(mask ? '•'.repeat(Math.min(buf.length, 8)) || '(skipped)' : buf.trim() || '(skipped)') + '\n');
-          resolve(buf.trim());
+          stdout.write(' ' + soft(label) + ' ' + neon(mask ? '•'.repeat(Math.min(value.length, 8)) || '(skipped)' : value || '(skipped)') + '\n');
+          resolve(value);
           return;
+        }
         case 'ctrl-c': off(); area.clear(); resolve(null); return;
       }
       draw();

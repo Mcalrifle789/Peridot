@@ -2,17 +2,22 @@
 // Peridot — local AI agent runtime. Entry point / command dispatch.
 import { runMain, renderOnce } from '../src/main.js';
 import { runSetup } from '../src/setup.js';
-import { loadConfig, activeProvider, audioUnlocked, CONFIG_PATH, GATEWAY_PORT } from '../src/config.js';
-import { C, paint, BOLD, neon, nb, soft, dim, grey, white } from '../src/theme.js';
+import { loadConfig, activeProvider, audioUnlocked, CONFIG_PATH, GATEWAY_PORT, VERSION } from '../src/config.js';
+import { C, paint, BOLD, neon, nb, soft, dim, grey, white, applyTheme, currentTheme } from '../src/theme.js';
+import { configuredProviders } from '../src/providers.js';
+import { findPython, loadCatalog } from '../src/catalog.js';
+import { nativeHashAvailable } from '../src/hash.js';
 import yaml from 'js-yaml';
 
 const [, , cmd] = process.argv;
+
+applyTheme(loadConfig().theme);
 
 const HELP = `
  ${nb('peridot')} ${soft('— local AI agent runtime')}
 
    ${neon('peridot')}            ${grey('launch the main runtime')}
-   ${neon('peridot setup')}      ${grey('configuration wizard (credentials, providers, search, audio)')}
+   ${neon('peridot setup')}      ${grey('configuration wizard (credentials, model providers, search, audio)')}
    ${neon('peridot status')}     ${grey('quick status report')}
    ${neon('peridot config')}     ${grey('print loaded configuration (keys redacted)')}
    ${neon('peridot doctor')}     ${grey('environment diagnostics')}
@@ -44,10 +49,17 @@ async function main() {
     case 'status': {
       const cfg = loadConfig();
       const p = activeProvider(cfg);
+      const catalog = loadCatalog();
+      const providers = configuredProviders(cfg)
+        .map((x) => {
+          const entry = catalog.providers[x.key];
+          return `${x.label} (${entry?.fetchedAt ? entry.models.length + ' models' : 'models not listed yet'})`;
+        }).join(', ');
       console.log('\n ' + nb('peridot') + soft(' status'));
       console.log('   ' + soft('config    ') + white(cfg._exists ? 'peridot.yaml (loaded)' : 'missing — run peridot setup'));
-      console.log('   ' + soft('model     ') + white(cfg.model.display));
-      console.log('   ' + soft('provider  ') + white(p ? p.name : 'none (offline)'));
+      console.log('   ' + soft('model     ') + white(cfg.model.id) + grey(p ? `  via ${p.label}` : ''));
+      console.log('   ' + soft('providers ') + white(providers || 'none (offline)'));
+      console.log('   ' + soft('theme     ') + white(currentTheme().name));
       console.log('   ' + soft('gateway   ') + white(`http://127.0.0.1:${GATEWAY_PORT} (starts with runtime)`));
       console.log('   ' + soft('audio     ') + white(audioUnlocked(cfg) ? 'unlocked' : 'locked') + '\n');
       return;
@@ -60,10 +72,13 @@ async function main() {
     case 'doctor': {
       const cfg = loadConfig();
       const p = activeProvider(cfg);
+      const py = findPython();
       const rows = [
         ['node ' + process.version, parseInt(process.versions.node) >= 18],
         ['config ' + (cfg._exists ? 'loaded' : 'missing'), cfg._exists],
-        ['model provider ' + (p ? p.name : 'none'), Boolean(p)],
+        ['model providers ' + (configuredProviders(cfg).map((x) => x.label).join(', ') || 'none'), Boolean(p)],
+        ['python ' + (py ? py.join(' ') + ' (model discovery)' : 'not found — needed to discover models'), Boolean(py)],
+        ['password hasher ' + (nativeHashAvailable() ? 'native C' : 'node crypto (npm run build:native for the C build)'), true],
         ['search provider ' + (cfg.search?.provider || 'none'), Boolean(cfg.search?.provider)],
         ['audio suite ' + (audioUnlocked(cfg) ? 'unlocked' : 'locked (optional)'), true],
       ];
@@ -75,7 +90,7 @@ async function main() {
       return;
     }
     case '--version': case '-v': case 'version':
-      console.log('peridot v0.2.0');
+      console.log(`peridot v${VERSION}`);
       return;
     case 'help': case '--help': case '-h':
     default:

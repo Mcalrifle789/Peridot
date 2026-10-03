@@ -1,17 +1,19 @@
-// The 61 Peridot skills/commands. `args: true` means the command accepts arguments
-// (menu selection fills the input instead of executing immediately).
+// The 62 Peridot skills/commands. `args: true` means the command accepts arguments
+// (menu selection fills the input instead of executing immediately);
+// `optional: true` runs it straight from the menu — Tab still fills it for arguments.
 // `audio: true` commands stay locked until ElevenLabs + Deepgram keys are configured.
 
 const C = (name, desc, cat, opts = {}) => ({ name, desc, cat, ...opts });
 
 export const COMMANDS = [
-  // ── system (17)
+  // ── system (18)
   C('help', 'show command overview', 'system'),
   C('clear', 'clear the screen', 'system'),
   C('exit', 'shut down the runtime', 'system'),
   C('mode', 'switch plan | build mode', 'system', { args: true }),
-  C('model', 'show or set active model', 'system', { args: true }),
-  C('models', 'list configured model providers', 'system'),
+  C('model', 'pick a model from every provider', 'system', { args: true, optional: true }),
+  C('models', 'providers + model counts · refresh', 'system', { args: true, optional: true }),
+  C('provider', 'add, replace or remove model providers', 'system', { args: true, optional: true }),
   C('session', 'show current session', 'system'),
   C('sessions', 'list saved sessions', 'system'),
   C('new', 'start a fresh session', 'system'),
@@ -20,7 +22,7 @@ export const COMMANDS = [
   C('config', 'show loaded configuration', 'system'),
   C('setup', 'how to re-run the setup wizard', 'system'),
   C('tokens', 'token usage this session', 'system'),
-  C('theme', 'about the peridot theme', 'system'),
+  C('theme', 'change the GUI theme (live preview)', 'system', { args: true, optional: true }),
   C('version', 'runtime version', 'system'),
   C('doctor', 'run environment diagnostics', 'system'),
 
@@ -81,8 +83,8 @@ export const COMMANDS = [
   C('sound', 'sound effect generation', 'audio', { args: true, audio: true }),
 ];
 
-if (COMMANDS.length !== 61) {
-  throw new Error(`Peridot expects exactly 61 commands, found ${COMMANDS.length}`);
+if (COMMANDS.length !== 62) {
+  throw new Error(`Peridot expects exactly 62 commands, found ${COMMANDS.length}`);
 }
 
 export const findCommand = (name) => COMMANDS.find((c) => c.name === name);
